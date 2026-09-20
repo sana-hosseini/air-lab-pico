@@ -174,7 +174,7 @@ pip install mpremote
 ### 3. Get the project files
 
 ```bash
-git clone https://github.com/[PLACEHOLDER: github-username]/air-lab-pico.git
+git clone https://github.com/sana-hosseini/air-lab-pico.git
 cd air-lab-pico
 ```
 
@@ -523,4 +523,4 @@ and the documentation in this repository. The bundled drivers
 
 ## Author
 
-Sana - GitHub: `[PLACEHOLDER: github-username]`
+Sana - GitHub: `sana-hosseini`
