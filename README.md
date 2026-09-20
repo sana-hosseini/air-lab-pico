@@ -479,11 +479,11 @@ air-lab-pico/
 
 ## Third-party code
 
-| File | Purpose | Author | Source | License |
+| File | Purpose | Source | License |
 |---|---|---|---|---|
-| [`src/ens160.py`](src/ens160.py) | ENS160 air-quality sensor driver | Sina Hosseini (@SinaHosseini7) | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
-| [`src/aht21.py`](src/aht21.py) | AHT21 temperature and humidity driver | Sina Hosseini (@SinaHosseini7) | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
-| [`src/ssd1309.py`](src/ssd1309.py) | SSD1309 OLED display driver | Sina Hosseini (@SinaHosseini7) | https://github.com/SinaHosseini7/micropython-ssd1309 | MIT |
+| [`src/ens160.py`](src/ens160.py) | ENS160 air-quality sensor driver | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
+| [`src/aht21.py`](src/aht21.py) | AHT21 temperature and humidity driver | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
+| [`src/ssd1309.py`](src/ssd1309.py) | SSD1309 OLED display driver | https://github.com/SinaHosseini7/micropython-ssd1309 | MIT |
 
 The driver files are unmodified copies and each original LICENSE is kept in
 [`third_party/`](third_party/).
