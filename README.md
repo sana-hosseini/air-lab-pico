@@ -480,7 +480,7 @@ air-lab-pico/
 ## Third-party code
 
 | File | Purpose | Source | License |
-|---|---|---|---|---|
+|---|---|---|---|
 | [`src/ens160.py`](src/ens160.py) | ENS160 air-quality sensor driver | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
 | [`src/aht21.py`](src/aht21.py) | AHT21 temperature and humidity driver | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
 | [`src/ssd1309.py`](src/ssd1309.py) | SSD1309 OLED display driver | https://github.com/SinaHosseini7/micropython-ssd1309 | MIT |
