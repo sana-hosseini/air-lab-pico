@@ -13,6 +13,7 @@ readings and history graphs on an OLED and logs everything to flash.
 
 [Features](#features) - [Screenshots](#screenshots) - [Hardware and parts](#hardware-and-parts) -
 [Wiring](#wiring) - [Installation](#installation) - [Configuration](#configuration) -
+[Temperature and humidity calibration](#temperature-and-humidity-calibration) -
 [How it works](#how-it-works) - [Log file format](#log-file-format) - [Results](#results) -
 [Known limitations](#known-limitations) - [Troubleshooting](#troubleshooting) -
 [Repository layout](#repository-layout) - [Third-party code](#third-party-code) -
@@ -240,6 +241,63 @@ Changing `DATA_SAMPLE_INTERVAL` changes both how much history fits in RAM and
 how large a log file becomes, because the file size target is expressed in days
 of samples.
 
+Two more constants, `TEMP_OFFSET` and `HUMIDITY_OFFSET`, sit at the top of
+[`src/aht21.py`](src/aht21.py) rather than in `main.py`; see
+[Temperature and humidity calibration](#temperature-and-humidity-calibration).
+
+## Temperature and humidity calibration
+
+On the ENS160 + AHT21 combo module the temperature sensor reads high. The ENS160
+is a metal-oxide gas sensor with heaters inside its package - Figure 1,
+"Functional Blocks", on page 4 of the
+[ENS160 datasheet](https://www.sciosense.com/wp-content/uploads/2023/12/ENS160-Datasheet.pdf)
+shows four of them - and the AHT21 sits close to it on the same small board, so
+it measures its own warmed surroundings rather than the room. The voltage
+regulator on the module may add heat as well.
+
+In the reference build, the AHT21 read roughly 5-7 °C above a mercury
+thermometer placed next to the device.
+
+### What this repository changes
+
+[`src/aht21.py`](src/aht21.py) is the upstream driver with one change by this
+project's author. Two constants were added at the top of the file,
+`TEMP_OFFSET` (default `-5.0` °C) and `HUMIDITY_OFFSET` (default `+7.0` %RH),
+and `read_temperature_humidity()` now adds them to every reading before
+returning it, clamping humidity to 0-100 %RH. The module docstring and the
+method docstring were extended to describe this. Nothing else in the driver was
+changed.
+
+Because `main.py` passes the corrected values to `ens.set_compensation()`, the
+corrected temperature and humidity are what the ENS160 uses for its own
+compensation, what the dashboard and graphs show, and what is written to the log
+files.
+
+### Choosing `TEMP_OFFSET` for your build
+
+The right value depends on the individual module, where it is mounted, airflow
+and any enclosure, so measure it at the spot where the device will live:
+
+1. Set `TEMP_OFFSET = 0.0` in `src/aht21.py` and copy the file to the Pico, so
+   the dashboard shows the uncorrected reading.
+2. Place a standard thermometer next to the sensor module and let the device run
+   until its temperature reading stops drifting.
+3. Compare the two over several readings and note the typical difference.
+4. Set `TEMP_OFFSET` to minus that difference - usually between `-5.0` and
+   `-7.0` for this module, though it can differ - and copy the file again.
+
+The ranges quoted in the comments inside `aht21.py` are general guidance; the
+measurement at your own location is what counts.
+
+### The humidity offset is not validated
+
+`HUMIDITY_OFFSET = +7.0` was chosen as a rough estimate during AI-assisted
+development. It has **not** been checked against a reference hygrometer, so
+humidity values from this build should be treated as approximate. A fixed offset
+is also a simplification: relative humidity depends on temperature, so the
+amount by which a warmed sensor under-reads changes with conditions. With a
+hygrometer, `HUMIDITY_OFFSET` can be set the same way as the temperature offset.
+
 ## How it works
 
 ```mermaid
@@ -260,8 +318,8 @@ flowchart LR
 The main loop targets a 50 ms cycle, about 20 Hz. Every cycle it feeds the
 watchdog, polls the button with a 50 ms debounce, and redraws the current page
 at most once per second. Sampling is on its own timer: when
-`DATA_SAMPLE_INTERVAL` has elapsed, the onboard LED turns on, the AHT21 is read,
-the reading is pushed into the ENS160 as temperature and humidity compensation,
+`DATA_SAMPLE_INTERVAL` has elapsed, the onboard LED turns on, the AHT21 is read
+(with the calibration offsets applied inside the driver), the reading is pushed into the ENS160 as temperature and humidity compensation,
 and `ens.update()` is called. If any of that raises, the error is printed,
 temperature and humidity are recorded as `0.0` for that sample, and the gas
 fields are recorded as invalid. A garbage collection pass runs every 600 loop
@@ -418,6 +476,12 @@ capacity, no measured number of days of flash storage and no uptime figure
 beyond those three days are claimed here. Before this build the ENS160 was
 powered for 24 hours, as its driver documentation recommends for first-time use.
 
+During development the temperature readings were also compared against a
+mercury thermometer next to the device; that comparison is the basis of the
+temperature offset described in
+[Temperature and humidity calibration](#temperature-and-humidity-calibration).
+Humidity was not compared against a reference instrument.
+
 ## Known limitations
 
 - **eCO2 and TVOC are estimates.** The ENS160 is a metal-oxide gas sensor; its
@@ -442,9 +506,11 @@ powered for 24 hours, as its driver documentation recommends for first-time use.
   shorter than the configured value; this does not affect normal operation.
 - **Readings depend on placement.** The sensor module sits close to its own
   heating element and to the Pico, and both add heat; airflow, enclosure and
-  distance from walls all shift the values. Compare against a reference
-  instrument in the spot where the device will live before trusting absolute
-  numbers.
+  distance from walls all shift the values. The offsets in `src/aht21.py` only
+  correct for this at the location where they were measured, and the humidity
+  offset is an unvalidated estimate. Compare against a reference instrument in
+  the spot where the device will live before trusting absolute numbers; see
+  [Temperature and humidity calibration](#temperature-and-humidity-calibration).
 
 ## Troubleshooting
 
@@ -456,7 +522,7 @@ powered for 24 hours, as its driver documentation recommends for first-time use.
 | Dashboard keeps showing `WARMUP`, graphs say `Warming up...` | The ENS160 reports warm-up for about three minutes after every power-on. A brand-new sensor also needs 24 hours of continuous power once, so its calibration persists. |
 | Boot stops with `Insufficient RAM: need 1000+ samples` | Less free heap than the formula expects. Confirm the firmware is a Pico 2 (RP2350) MicroPython build rather than a Pico 1 build, remove unrelated files from the board, or raise `RAM_USAGE_TARGET`. |
 | Console prints `FLASH ERROR` and logging continues in RAM-only mode | A filesystem write failed, usually a full filesystem. Copy the `airlab_NNN.bin` files off the board and delete the old ones. |
-| Temperature reads high and humidity low compared with a reference | The AHT21 driver applies fixed compensation offsets for this combo module, because the ENS160's heater warms the neighbouring sensor. The driver documentation describes adjusting `TEMP_OFFSET` and `HUMIDITY_OFFSET` at the top of the file; note that editing them means `src/aht21.py` is no longer an unmodified upstream copy. |
+| Temperature reads high and humidity low compared with a reference | The ENS160's internal heaters warm the neighbouring AHT21 on the combo module. The copy of `src/aht21.py` in this repository applies fixed offsets for this; if the readings still differ from a reference at your location, set `TEMP_OFFSET` (and, with a hygrometer, `HUMIDITY_OFFSET`) at the top of the file as described in [Temperature and humidity calibration](#temperature-and-humidity-calibration). |
 
 ## Repository layout
 
@@ -469,7 +535,7 @@ air-lab-pico/
 │   ├── buffers.py
 │   ├── datalogger.py
 │   ├── ens160.py             # third-party, unmodified
-│   ├── aht21.py              # third-party, unmodified
+│   ├── aht21.py              # third-party, modified: calibration offsets added
 │   └── ssd1309.py            # third-party, unmodified
 ├── third_party/
 │   ├── LICENSE-micropython-ens160-aht21
@@ -485,13 +551,17 @@ air-lab-pico/
 | [`src/aht21.py`](src/aht21.py) | AHT21 temperature and humidity driver | https://github.com/SinaHosseini7/micropython-ens160-aht21 | MIT |
 | [`src/ssd1309.py`](src/ssd1309.py) | SSD1309 OLED display driver | https://github.com/SinaHosseini7/micropython-ssd1309 | MIT |
 
-The driver files are unmodified copies and each original LICENSE is kept in
-[`third_party/`](third_party/).
+`src/ens160.py` and `src/ssd1309.py` are unmodified copies. `src/aht21.py` is
+modified: this project's author added the `TEMP_OFFSET` and `HUMIDITY_OFFSET`
+constants, the lines in `read_temperature_humidity()` that apply them, and the
+docstring notes describing them (see
+[Temperature and humidity calibration](#temperature-and-humidity-calibration)).
+Each original LICENSE is kept in [`third_party/`](third_party/).
 
-These three drivers were written by Sina Hosseini and are used here as they are;
-none of them is the work of this project's author. They made the sensor and
-display side of this build a matter of wiring and configuration rather than
-register work.
+These three drivers were written by Sina Hosseini. Apart from the calibration
+change in `aht21.py`, the driver code is not the work of this project's author.
+The drivers made the sensor and display side of this build a matter of wiring
+and configuration rather than register work.
 
 ## References
 
@@ -518,8 +588,10 @@ MIT. SPDX identifier: `MIT`. See [LICENSE](LICENSE).
 This license covers the author's own code - [`src/main.py`](src/main.py),
 [`src/buffers.py`](src/buffers.py), [`src/datalogger.py`](src/datalogger.py) -
 and the documentation in this repository. The bundled drivers
-(`src/ens160.py`, `src/aht21.py`, `src/ssd1309.py`) keep their own license; see
-[Third-party code](#third-party-code) and [`third_party/`](third_party/).
+(`src/ens160.py`, `src/aht21.py`, `src/ssd1309.py`) keep their own MIT license,
+and the calibration change to `src/aht21.py` is distributed under that same
+license; see [Third-party code](#third-party-code) and
+[`third_party/`](third_party/).
 
 ## Author
 
